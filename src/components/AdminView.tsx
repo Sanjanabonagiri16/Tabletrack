@@ -92,10 +92,10 @@ const AdminView = () => {
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h4 className="font-semibold text-slate-800">
-                        Table {order.tableId}
+                        Table {order.table_id}
                       </h4>
                       <p className="text-sm text-slate-500">
-                        {formatTime(order.timestamp)}
+                        {formatTime(new Date(order.created_at))}
                       </p>
                     </div>
                     <div className="text-right">

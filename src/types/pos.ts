@@ -1,5 +1,6 @@
 
 export interface User {
+  id: string;
   username: string;
   role: 'waiter' | 'admin';
 }
@@ -23,9 +24,9 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
-  tableId: number;
+  table_id: number;
   items: OrderItem[];
   total: number;
   status: 'pending' | 'preparing' | 'served';
-  timestamp: Date;
+  created_at: string;
 }

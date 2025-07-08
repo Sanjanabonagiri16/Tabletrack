@@ -1,70 +1,174 @@
-
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Table, MenuItem, Order, OrderItem } from '@/types/pos';
+import { useAuth } from './AuthContext';
 
 interface POSContextType {
   tables: Table[];
   menuItems: MenuItem[];
   orders: Order[];
-  updateTableStatus: (tableId: number, status: 'available' | 'occupied') => void;
-  addOrder: (order: Order) => void;
+  loading: boolean;
+  updateTableStatus: (tableId: number, status: 'available' | 'occupied') => Promise<void>;
+  addOrder: (tableId: number, items: OrderItem[]) => Promise<void>;
+  fetchOrders: () => Promise<void>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
 
-// Demo data
-const DEMO_TABLES: Table[] = Array.from({ length: 16 }, (_, i) => ({
-  id: i + 1,
-  status: Math.random() > 0.7 ? 'occupied' : 'available'
-}));
-
-const DEMO_MENU: MenuItem[] = [
-  // Appetizers
-  { id: 1, name: 'Caesar Salad', price: 12.99, category: 'Appetizers' },
-  { id: 2, name: 'Garlic Bread', price: 8.99, category: 'Appetizers' },
-  { id: 3, name: 'Buffalo Wings', price: 14.99, category: 'Appetizers' },
-  
-  // Main Courses
-  { id: 4, name: 'Grilled Salmon', price: 24.99, category: 'Main Courses' },
-  { id: 5, name: 'Ribeye Steak', price: 32.99, category: 'Main Courses' },
-  { id: 6, name: 'Chicken Parmesan', price: 19.99, category: 'Main Courses' },
-  { id: 7, name: 'Seafood Pasta', price: 22.99, category: 'Main Courses' },
-  
-  // Beverages
-  { id: 8, name: 'House Wine', price: 8.99, category: 'Beverages' },
-  { id: 9, name: 'Craft Beer', price: 6.99, category: 'Beverages' },
-  { id: 10, name: 'Fresh Juice', price: 4.99, category: 'Beverages' },
-  
-  // Desserts
-  { id: 11, name: 'Chocolate Cake', price: 9.99, category: 'Desserts' },
-  { id: 12, name: 'Tiramisu', price: 11.99, category: 'Desserts' },
-];
-
 export const POSProvider = ({ children }: { children: ReactNode }) => {
-  const [tables, setTables] = useState<Table[]>(DEMO_TABLES);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const menuItems = DEMO_MENU;
+  const [loading, setLoading] = useState(true);
+  const { user, session } = useAuth();
 
-  const updateTableStatus = (tableId: number, status: 'available' | 'occupied') => {
-    setTables(prev => 
-      prev.map(table => 
-        table.id === tableId ? { ...table, status } : table
-      )
-    );
+  // Fetch tables
+  const fetchTables = async () => {
+    if (!session) return;
+    
+    const { data, error } = await supabase
+      .from('tables')
+      .select('*')
+      .order('id');
+    
+    if (data && !error) {
+      setTables(data.map(table => ({
+        id: table.id,
+        status: table.status as 'available' | 'occupied'
+      })));
+    }
   };
 
-  const addOrder = (order: Order) => {
-    setOrders(prev => [...prev, order]);
-    updateTableStatus(order.tableId, 'occupied');
+  // Fetch menu items
+  const fetchMenuItems = async () => {
+    if (!session) return;
+    
+    const { data, error } = await supabase
+      .from('menu_items')
+      .select('*')
+      .order('category, name');
+    
+    if (data && !error) {
+      setMenuItems(data);
+    }
   };
+
+  // Fetch orders with items
+  const fetchOrders = async () => {
+    if (!session) return;
+    
+    const { data: ordersData, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
+          *,
+          menu_items (*)
+        )
+      `)
+      .order('created_at', { ascending: false });
+    
+    if (ordersData && !error) {
+      const formattedOrders: Order[] = ordersData.map(order => ({
+        id: order.id,
+        table_id: order.table_id,
+        total: parseFloat(order.total.toString()),
+        status: order.status as 'pending' | 'preparing' | 'served',
+        created_at: order.created_at,
+        items: order.order_items.map((item: any) => ({
+          menuItem: {
+            id: item.menu_items.id,
+            name: item.menu_items.name,
+            price: parseFloat(item.menu_items.price.toString()),
+            category: item.menu_items.category
+          },
+          quantity: item.quantity
+        }))
+      }));
+      setOrders(formattedOrders);
+    }
+  };
+
+  // Update table status
+  const updateTableStatus = async (tableId: number, status: 'available' | 'occupied') => {
+    if (!session) return;
+    
+    const { error } = await supabase
+      .from('tables')
+      .update({ status })
+      .eq('id', tableId);
+    
+    if (!error) {
+      setTables(prev => 
+        prev.map(table => 
+          table.id === tableId ? { ...table, status } : table
+        )
+      );
+    }
+  };
+
+  // Add new order
+  const addOrder = async (tableId: number, items: OrderItem[]) => {
+    if (!session || !user) return;
+    
+    const total = items.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0);
+    
+    // Create order
+    const { data: orderData, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        table_id: tableId,
+        user_id: session.user.id,
+        total,
+        status: 'pending'
+      })
+      .select()
+      .single();
+    
+    if (orderError || !orderData) return;
+    
+    // Create order items
+    const orderItems = items.map(item => ({
+      order_id: orderData.id,
+      menu_item_id: item.menuItem.id,
+      quantity: item.quantity,
+      price: item.menuItem.price
+    }));
+    
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .insert(orderItems);
+    
+    if (!itemsError) {
+      // Update table status to occupied
+      await updateTableStatus(tableId, 'occupied');
+      // Refresh orders
+      await fetchOrders();
+    }
+  };
+
+  // Load data when user is authenticated
+  useEffect(() => {
+    if (session && user) {
+      Promise.all([
+        fetchTables(),
+        fetchMenuItems(),
+        fetchOrders()
+      ]).finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [session, user]);
 
   return (
     <POSContext.Provider value={{
       tables,
       menuItems,
       orders,
+      loading,
       updateTableStatus,
-      addOrder
+      addOrder,
+      fetchOrders
     }}>
       {children}
     </POSContext.Provider>

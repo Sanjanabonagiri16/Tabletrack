@@ -1,42 +1,126 @@
-
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User as SupabaseUser, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 import { User } from '@/types/pos';
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => boolean;
-  logout: () => void;
+  session: Session | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<{ error?: string }>;
+  signup: (email: string, password: string, username: string, role: 'waiter' | 'admin') => Promise<{ error?: string }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Hardcoded users for demo
-const DEMO_USERS = [
-  { username: 'waiter1', password: 'password', role: 'waiter' as const },
-  { username: 'admin1', password: 'admin123', role: 'admin' as const },
-];
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = (username: string, password: string): boolean => {
-    const foundUser = DEMO_USERS.find(
-      u => u.username === username && u.password === password
+  useEffect(() => {
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setSession(session);
+        
+        if (session?.user) {
+          // Fetch user profile
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .single();
+          
+          if (profile) {
+            setUser({
+              id: profile.user_id,
+              username: profile.username,
+              role: profile.role as 'waiter' | 'admin'
+            });
+          }
+        } else {
+          setUser(null);
+        }
+        setLoading(false);
+      }
     );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        // Fetch user profile for existing session
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single()
+          .then(({ data: profile }) => {
+            if (profile) {
+              setUser({
+                id: profile.user_id,
+                username: profile.username,
+                role: profile.role as 'waiter' | 'admin'
+              });
+            }
+            setLoading(false);
+          });
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (email: string, password: string): Promise<{ error?: string }> => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
     
-    if (foundUser) {
-      setUser({ username: foundUser.username, role: foundUser.role });
-      return true;
+    if (error) {
+      return { error: error.message };
     }
-    return false;
+    
+    return {};
   };
 
-  const logout = () => {
-    setUser(null);
+  const signup = async (email: string, password: string, username: string, role: 'waiter' | 'admin'): Promise<{ error?: string }> => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username,
+          role
+        },
+        emailRedirectTo: `${window.location.origin}/`
+      }
+    });
+    
+    if (error) {
+      return { error: error.message };
+    }
+    
+    return {};
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      session,
+      loading,
+      login,
+      signup,
+      logout
+    }}>
       {children}
     </AuthContext.Provider>
   );

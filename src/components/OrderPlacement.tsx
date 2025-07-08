@@ -60,7 +60,7 @@ const OrderPlacement = ({ tableId, onBack }: OrderPlacementProps) => {
     );
   };
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (orderItems.length === 0) {
       toast({
         title: "Empty Order",
@@ -70,21 +70,20 @@ const OrderPlacement = ({ tableId, onBack }: OrderPlacementProps) => {
       return;
     }
 
-    const order: Order = {
-      id: `order-${Date.now()}`,
-      tableId,
-      items: orderItems,
-      total: getTotalPrice(),
-      status: 'pending',
-      timestamp: new Date()
-    };
-
-    addOrder(order);
-    toast({
-      title: "Order Placed",
-      description: `Order for Table ${tableId} has been placed successfully`,
-    });
-    onBack();
+    try {
+      await addOrder(tableId, orderItems);
+      toast({
+        title: "Order Placed",
+        description: `Order for Table ${tableId} has been placed successfully`,
+      });
+      onBack();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to place order. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
