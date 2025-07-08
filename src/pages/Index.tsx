@@ -1,13 +1,56 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import React, { useState } from 'react';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { POSProvider } from '@/contexts/POSContext';
+import LoginForm from '@/components/LoginForm';
+import Header from '@/components/Header';
+import TableGrid from '@/components/TableGrid';
+import OrderPlacement from '@/components/OrderPlacement';
+import AdminView from '@/components/AdminView';
+
+const Dashboard = () => {
+  const { user } = useAuth();
+  const [selectedTable, setSelectedTable] = useState<number | null>(null);
+
+  if (!user) return <LoginForm />;
+
+  const handleTableSelect = (tableId: number) => {
+    if (user.role === 'waiter') {
+      setSelectedTable(tableId);
+    }
+  };
+
+  const handleBackToTables = () => {
+    setSelectedTable(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <Header />
+      
+      <main>
+        {user.role === 'admin' ? (
+          <AdminView />
+        ) : selectedTable ? (
+          <OrderPlacement 
+            tableId={selectedTable} 
+            onBack={handleBackToTables}
+          />
+        ) : (
+          <TableGrid onTableSelect={handleTableSelect} />
+        )}
+      </main>
+    </div>
+  );
+};
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <AuthProvider>
+      <POSProvider>
+        <Dashboard />
+      </POSProvider>
+    </AuthProvider>
   );
 };
 
