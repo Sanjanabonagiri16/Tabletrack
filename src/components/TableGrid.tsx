@@ -40,18 +40,18 @@ const TableGrid = ({ onTableSelect }: TableGridProps) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
-        {tables.map((table) => (
+      <div className="grid grid-cols-5 gap-4 max-w-4xl mx-auto">
+        {tables.slice(0, 25).map((table) => (
           <Card
             key={table.id}
-            className={`${getTableColor(table.status)} cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-md`}
+            className={`${getTableColor(table.status)} cursor-pointer transition-all duration-200 hover:scale-105 hover:shadow-md aspect-square`}
             onClick={() => onTableSelect(table.id)}
           >
-            <div className="p-6 text-center">
-              <div className="text-2xl font-bold text-slate-700 mb-2">
-                {table.id}
+            <div className="p-4 text-center h-full flex flex-col justify-center">
+              <div className="text-xl font-bold text-slate-700 mb-2">
+                Table {table.id}
               </div>
-              <Badge className={getStatusColor(table.status)}>
+              <Badge className={`${getStatusColor(table.status)} text-xs`}>
                 {table.status}
               </Badge>
             </div>

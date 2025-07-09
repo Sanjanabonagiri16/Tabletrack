@@ -76,36 +76,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (email: string, password: string): Promise<{ error?: string }> => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-    
-    if (error) {
-      return { error: error.message };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (error) {
+        console.error('Login error:', error);
+        return { error: error.message };
+      }
+
+      if (!data.user) {
+        return { error: 'Login failed - no user data returned' };
+      }
+      
+      return {};
+    } catch (err) {
+      console.error('Login exception:', err);
+      return { error: 'An unexpected error occurred during login' };
     }
-    
-    return {};
   };
 
   const signup = async (email: string, password: string, username: string, role: 'waiter' | 'admin'): Promise<{ error?: string }> => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          username,
-          role
-        },
-        emailRedirectTo: `${window.location.origin}/`
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username,
+            role
+          },
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      });
+      
+      if (error) {
+        console.error('Signup error:', error);
+        return { error: error.message };
       }
-    });
-    
-    if (error) {
-      return { error: error.message };
+
+      if (!data.user) {
+        return { error: 'Signup failed - no user data returned' };
+      }
+      
+      return {};
+    } catch (err) {
+      console.error('Signup exception:', err);
+      return { error: 'An unexpected error occurred during signup' };
     }
-    
-    return {};
   };
 
   const logout = async () => {

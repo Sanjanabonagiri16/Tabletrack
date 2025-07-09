@@ -171,12 +171,20 @@ const LoginForm = () => {
           </Tabs>
 
           {error && (
-            <Alert className="mt-4 border-rose-200 bg-rose-50">
-              <AlertDescription className="text-rose-600">
+            <Alert className={`mt-4 ${error.includes('Check your email') ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
+              <AlertDescription className={error.includes('Check your email') ? 'text-emerald-600' : 'text-rose-600'}>
                 {error}
               </AlertDescription>
             </Alert>
           )}
+
+          {/* Demo credentials info */}
+          <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <p className="text-xs text-indigo-600 font-medium mb-2">Demo Credentials:</p>
+            <p className="text-xs text-indigo-500">Admin: admin@demo.com / password</p>
+            <p className="text-xs text-indigo-500">Waiter: waiter@demo.com / password</p>
+            <p className="text-xs text-indigo-400 mt-1">Or create a new account above</p>
+          </div>
         </CardContent>
       </Card>
     </div>
