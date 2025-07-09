@@ -1,12 +1,16 @@
 
 import React from 'react';
 import { usePOS } from '@/contexts/POSContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, DollarSign, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Clock, DollarSign, Users, ChefHat, CheckCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const AdminView = () => {
-  const { orders, tables } = usePOS();
+  const { orders, tables, fetchOrders } = usePOS();
+  const { toast } = useToast();
 
   const activeOrders = orders.filter(order => order.status !== 'served');
   const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
@@ -26,6 +30,48 @@ const AdminView = () => {
       hour: '2-digit', 
       minute: '2-digit' 
     });
+  };
+
+  const updateOrderStatus = async (orderId: string, newStatus: 'pending' | 'preparing' | 'served') => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to update order status",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // If order is served, mark table as available
+      if (newStatus === 'served') {
+        const order = orders.find(o => o.id === orderId);
+        if (order) {
+          await supabase
+            .from('tables')
+            .update({ status: 'available' })
+            .eq('id', order.table_id);
+        }
+      }
+
+      await fetchOrders();
+      toast({
+        title: "Success",
+        description: `Order status updated to ${newStatus}`,
+      });
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -115,6 +161,30 @@ const AdminView = () => {
                         <span>${(item.quantity * item.menuItem.price).toFixed(2)}</span>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Order Status Management */}
+                  <div className="flex gap-2 mt-4 pt-3 border-t">
+                    {order.status === 'pending' && (
+                      <Button
+                        size="sm"
+                        onClick={() => updateOrderStatus(order.id, 'preparing')}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        <ChefHat className="w-3 h-3 mr-1" />
+                        Start Preparing
+                      </Button>
+                    )}
+                    {order.status === 'preparing' && (
+                      <Button
+                        size="sm"
+                        onClick={() => updateOrderStatus(order.id, 'served')}
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                      >
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Mark Served
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
